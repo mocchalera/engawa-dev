@@ -24,11 +24,13 @@ export default {
         return json({ revision: result.revision });
       }
       if (/^\/api\/benches\/[a-z0-9-]+(?:\/.*)?$/.test(url.pathname)) {
+        const benchId = url.pathname.split('/')[3];
+        if (!await directory.authorize(identity, benchId)) return json({ error: 'not_found', message: '作業台が見つかりません。' }, 404);
         const headers = new Headers(request.headers);
         headers.delete('Cf-Access-Jwt-Assertion');
         headers.delete('Cookie');
         headers.set('X-Engawa-Identity', JSON.stringify(identity));
-        return env.WORKBENCHES.getByName(url.pathname.split('/')[3]).fetch(new Request(request, { headers }));
+        return await env.WORKBENCHES.getByName(benchId).fetch(new Request(request, { headers }));
       }
       if (url.pathname.startsWith('/api/')) return json({ error: 'not_found' }, 404);
       if (!['GET', 'HEAD'].includes(request.method)) return json({ error: 'method' }, 405);

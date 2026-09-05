@@ -87,6 +87,12 @@ test('Cloudflare runtime: verified identity, SQLite work, ephemeral sockets and 
       assert.equal((await request('/api/policy', 'owner', 'PUT', moved)).status, 409);
       assert.equal((await (await request('/api/policy')).json()).revision, 1);
     });
+    await context.test('gateway rejects before allocating a workbench and catches transport rejection', async () => {
+      for (const [subject, bench] of [['outsider', 'shared'], ['owner', 'unknown-bench']]) {
+        assert.deepEqual(await (await request(`/__test/gateway?bench=${bench}`, subject)).json(), { allocations: 0, status: 404 });
+      }
+      assert.deepEqual(await (await request('/__test/gateway?bench=shared')).json(), { allocations: 1, status: 503 });
+    });
     const owner = await connect('owner'), editor = await connect('editor'), outsider = await connect('outsider', 'other-tenant');
     await context.test('WebSocket presence/knock, focus refusal and scope-limited notifications', async () => {
       await until(() => owner.messages.some((message) => message.kind === 'presence' && message.data.length === 2), 'two participants');

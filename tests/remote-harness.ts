@@ -17,6 +17,15 @@ export class Workbench extends ProductionWorkbench {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === '/__test/gateway') {
+      let allocations = 0;
+      const target = new URL(`/api/benches/${url.searchParams.get('bench')}`, url.origin);
+      const guarded = { ...env, WORKBENCHES: { getByName() { allocations++; return { async fetch() { throw new Error('Injected transport failure'); } }; } } };
+      try {
+        const response = await worker.fetch(new Request(target, request), guarded);
+        return Response.json({ allocations, status: response.status });
+      } catch { return Response.json({ allocations, status: 'unhandled_rejection' }); }
+    }
     if (url.pathname === '/__test/inspect') return Response.json(await env.WORKBENCHES.getByName('shared').inspect());
     if (url.pathname === '/__test/fail') { await env.WORKBENCHES.getByName('shared').failWrites(url.searchParams.get('on') === '1'); return new Response('ok'); }
     return worker.fetch(request, env);

@@ -35,3 +35,7 @@ Real IdP/Access account login/logout, deployed domain/alternate ingress, two phy
 - Current Node presence expired while a connected SSE client was idle: refresh the in-memory TTL on its heartbeat; retain no history. Old-stream close cleanup now cannot delete a new stream set.
 - New Miniflare 5 requires converted options rather than the v4 constructor shape. A file-path module configuration produced an internal startup error; the named bundled-module manifest worked. Explicit `resourcePersistencePath` was needed because the v4 converter did not carry the old persistence option. The restart test initially failed and then passed with persistent SQLite restored.
 - An initial patch referenced a nonexistent CI filename; the existing `.github/workflows/ci.yml` was identified and updated without creating a second workflow. Tests were not represented as green while these issues remained.
+
+## Follow-up self-review (2026-09-05)
+
+This is implementation-owner review, not independent approval. At `d6cda0dd2d7392c76c3a5b9c3566549bbbcc17e1`, a new gateway regression test demonstrated an unauthorized request invoking `WORKBENCHES.getByName` before rejection; an injected DO transport failure escaped the Worker's catch. The gateway now checks membership/grant before dispatch and awaits the forwarding promise, while retaining the DO-side recheck. The negative test requires zero workbench dispatches for unauthorized/unknown IDs and a controlled 503 on an authorized transport failure. No claim of measured cost savings is made.
