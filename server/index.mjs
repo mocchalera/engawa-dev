@@ -157,7 +157,10 @@ async function api(req, res, url) {
   if (req.method === 'GET' && !action) return json(res, 200, publicBench(s.actor, benchFor(s.actor, benchId)));
   if (req.method === 'GET' && action === 'handoff') return json(res, 200, handoff(s.actor, benchFor(s.actor, benchId), new Date().toISOString()));
   if (req.method === 'GET' && action === 'presence') return json(res, 200, { participants: publicPresence(benchId) });
-  if (req.method === 'POST' && action === 'notes') return json(res, 201, await mutate(s.actor, benchId, (bench) => addNote(s.actor, bench, await body(req), randomUUID(), new Date().toISOString())));
+  if (req.method === 'POST' && action === 'notes') {
+    const input = await body(req);
+    return json(res, 201, await mutate(s.actor, benchId, (bench) => addNote(s.actor, bench, input, randomUUID(), new Date().toISOString())));
+  }
 
   const confirm = /^notes\/([a-zA-Z0-9-]+)\/confirm$/.exec(action);
   if (req.method === 'POST' && confirm) {
