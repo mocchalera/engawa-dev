@@ -203,8 +203,12 @@ async function api(req, res, url) {
     const receivers = streams.get(s.id) ?? new Set(); receivers.add(res); streams.set(s.id, receivers);
     res.write(`event: presence\ndata: ${JSON.stringify(publicPresence(benchId))}\n\n`);
     res.write(`event: changed\ndata: ${JSON.stringify({ revision: benchFor(s.actor, benchId).revision })}\n\n`);
-    const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 15000); heartbeat.unref();
-    res.on('close', () => { clearInterval(heartbeat); receivers.delete(res); if (!receivers.size) streams.delete(s.id); });
+    const heartbeat = setInterval(() => {
+      const active = presence.get(s.id);
+      if (active?.benchId === benchId) active.updatedAt = Date.now();
+      res.write(': heartbeat\n\n');
+    }, 15000); heartbeat.unref();
+    res.on('close', () => { clearInterval(heartbeat); receivers.delete(res); if (!receivers.size && streams.get(s.id) === receivers) streams.delete(s.id); });
     return;
   }
   if (action === 'media-token' || action === 'execute') throw new DomainError(503, 'not_configured', '音声・画面配信・AI実行は未接続です。');
