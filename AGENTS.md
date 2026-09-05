@@ -16,9 +16,10 @@
 - Screen preview is not remote screen sharing. Do not imply media/AI functionality is connected before it is.
 
 ## Current implementation limits
-- Fixed fictional demo identities only. This is not production authentication.
+- `npm start` uses fixed fictional demo identities, not production authentication. The separate `remote/` entry verifies Cloudflare Access JWTs; provider login and remote two-device deployment remain unverified.
 - Local Node server binds to `127.0.0.1` and must not be exposed through a tunnel/reverse proxy.
 - JSON FileStore is a single-process development store, not a production multi-writer database.
+- Remote work uses SQLite Durable Objects and an administrator-managed membership/grant directory. Never ship `tests/remote-browser.ts` or expose the signed-identity loopback fixture.
 - Voice, Spatial Audio, remote screen share, recording, transcription and AI are not implemented.
 
 ## Verification

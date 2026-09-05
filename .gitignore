@@ -5,3 +5,8 @@ node_modules/
 !.env.example
 .DS_Store
 *.log
+.dev.vars
+.dev.vars.*
+.wrangler/
+.remote-build/
+remote/public/
