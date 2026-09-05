@@ -1,0 +1,171 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { build } from 'esbuild';
+import { Miniflare, convertV4MiniflareOptions, Response as MFResponse } from 'miniflare';
+import { generateKeyPair, exportJWK, SignJWT } from 'jose';
+
+const issuer = 'https://engawa-test.cloudflareaccess.com';
+const audience = 'engawa-test-audience';
+const origin = 'https://pilot.example';
+const initialPolicy = () => ({ revision: 0, members: { atelier: ['owner', 'editor', 'viewer', 'member-only'], studio: ['outsider'] }, benches: [
+  { id: 'shared', tenantId: 'atelier', title: 'Fictional shared pilot', goal: 'Resume work', grants: { owner: 'owner', editor: 'editor', viewer: 'viewer' } },
+  { id: 'private', tenantId: 'atelier', title: 'Private', goal: '', grants: { owner: 'owner' } },
+  { id: 'other-tenant', tenantId: 'studio', title: 'Other tenant', goal: '', grants: { outsider: 'owner' } }
+] });
+
+test('Cloudflare runtime: verified identity, SQLite work, ephemeral sockets and negative boundaries', { timeout: 60000 }, async (context) => {
+  const directory = await mkdtemp(`${tmpdir()}/engawa-remote-`);
+  const keys = await generateKeyPair('RS256', { extractable: true });
+  const jwk = { ...await exportJWK(keys.publicKey), kid: 'pilot-test', alg: 'RS256', use: 'sig' };
+  const sign = (subject, overrides = {}, signingKey = keys.privateKey) => new SignJWT({ type: 'app', email: `${subject}@example.invalid`, ...overrides }).setProtectedHeader({ alg: 'RS256', kid: 'pilot-test' }).setIssuer(issuer).setAudience(audience).setSubject(subject).setIssuedAt().setExpirationTime('10m').sign(signingKey);
+  const tokens = Object.fromEntries(await Promise.all(['owner', 'editor', 'viewer', 'outsider', 'member-only'].map(async (subject) => [subject, await sign(subject)])));
+  await build({ entryPoints: ['tests/remote-harness.ts'], bundle: true, format: 'esm', outfile: `${directory}/worker.mjs`, external: ['cloudflare:workers'], platform: 'browser' });
+  const options = {
+    name: 'engawa-test', modules: true, script: await readFile(`${directory}/worker.mjs`, 'utf8'), compatibilityDate: '2026-09-05',
+    durableObjects: { DIRECTORY: { className: 'Directory', useSQLite: true }, WORKBENCHES: { className: 'Workbench', useSQLite: true } },
+    bindings: { ACCESS_ISSUER: issuer, ACCESS_AUD: audience, ADMIN_SUBJECTS: 'owner' },
+    serviceBindings: { ASSETS: async (request) => {
+      const pathname = new URL(request.url).pathname;
+      if (!['/', '/app.js', '/style.css'].includes(pathname)) return new MFResponse('not found', { status: 404 });
+      return new MFResponse(await readFile(`remote/public/${pathname === '/' ? 'index.html' : pathname.slice(1)}`), { headers: { 'Content-Type': pathname === '/' ? 'text/html' : pathname === '/app.js' ? 'text/javascript' : 'text/css' } });
+    } },
+    outboundService: async (request) => {
+      assert.equal(request.url, `${issuer}/cdn-cgi/access/certs`);
+      return MFResponse.json({ keys: [jwk] });
+    }
+  };
+  const runtimeOptions = { ...convertV4MiniflareOptions(options), resourcePersistencePath: `${directory}/state` };
+  let runtime = new Miniflare(runtimeOptions);
+  const sockets = [];
+  const request = (path, subject = 'owner', method = 'GET', value, extra = {}) => runtime.dispatchFetch(origin + path, { method, headers: { 'Cf-Access-Jwt-Assertion': tokens[subject] ?? subject, Origin: origin, 'Content-Type': 'application/json', 'X-Engawa-Client': 'remote-ui', ...extra }, ...(value === undefined ? {} : { body: JSON.stringify(value) }) });
+  const connect = async (subject, bench = 'shared') => {
+    const response = await request(`/api/benches/${bench}/events`, subject, 'GET', undefined, { Upgrade: 'websocket' });
+    assert.equal(response.status, 101);
+    const socket = response.webSocket, messages = [];
+    socket.addEventListener('message', (event) => messages.push(JSON.parse(event.data)));
+    socket.accept(); sockets.push(socket);
+    return { socket, messages };
+  };
+  const until = async (predicate, description) => {
+    const deadline = Date.now() + 8000;
+    while (!predicate()) { if (Date.now() >= deadline) assert.fail(`Timed out: ${description}`); await new Promise((resolve) => setTimeout(resolve, 20)); }
+  };
+  try {
+    await context.test('signed identity required, audience/issuer/signature/expiry and actor spoofing rejected', async () => {
+      assert.equal((await runtime.dispatchFetch(origin + '/api/bootstrap')).status, 401);
+      assert.equal((await request('/api/bootstrap', 'not-a-jwt')).status, 401);
+      const wrongKeys = await generateKeyPair('RS256');
+      assert.equal((await request('/api/bootstrap', await sign('owner', {}, wrongKeys.privateKey))).status, 401);
+      for (const patch of [{ aud: 'wrong' }, { iss: 'https://wrong.example' }, { exp: 1 }, { nbf: Math.floor(Date.now() / 1000) + 60 }]) {
+        const token = await new SignJWT({ sub: 'owner', type: 'app', email: 'owner@example.invalid', iss: issuer, aud: audience, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 600, ...patch }).setProtectedHeader({ alg: 'RS256', kid: 'pilot-test' }).sign(keys.privateKey);
+        assert.equal((await request('/api/bootstrap', token)).status, 401);
+      }
+      assert.equal((await request('/api/session', 'owner', 'POST', { actorId: 'owner' })).status, 404);
+      assert.equal((await request('/api/demo-actors')).status, 404);
+      assert.equal((await request('/api/bootstrap', 'viewer', 'GET', undefined, { 'X-Engawa-Identity': JSON.stringify({ id: 'owner' }) })).status, 200);
+      assert.equal((await (await request('/api/bootstrap', 'viewer')).json()).actor.id, 'viewer');
+    });
+    await context.test('admin provisioning, CSRF, membership plus object grants and immutable tenant binding', async () => {
+      assert.equal((await request('/api/policy', 'editor')).status, 403);
+      assert.equal((await (await request('/api/policy')).json()).revision, 0);
+      assert.equal((await request('/api/policy', 'editor', 'PUT', initialPolicy())).status, 403);
+      assert.equal((await request('/api/policy', 'owner', 'PUT', initialPolicy(), { Origin: 'https://evil.example' })).status, 403);
+      assert.equal((await request('/api/policy', 'owner', 'PUT', initialPolicy())).status, 200);
+      assert.equal((await request('/api/policy', 'owner', 'PUT', initialPolicy())).status, 409);
+      for (const subject of ['outsider', 'member-only']) {
+        assert.equal((await request('/api/benches/shared', subject)).status, 404);
+        assert.equal((await request('/api/benches/shared/events', subject, 'GET', undefined, { Upgrade: 'websocket' })).status, 404);
+        assert.equal((await request('/api/benches/shared/handoff', subject)).status, 404);
+      }
+      assert.equal((await request('/api/benches/private', 'viewer')).status, 404);
+      assert.equal((await request('/api/benches/private', 'viewer', 'GET', undefined, { 'X-Engawa-Identity': JSON.stringify({ id: 'owner', expiresAt: Date.now() + 60000 }) })).status, 404);
+      assert.equal((await request('/api/benches/other-tenant', 'owner')).status, 404);
+      assert.deepEqual((await (await request('/api/bootstrap', 'viewer')).json()).benches.map((bench) => bench.id), ['shared']);
+      const moved = initialPolicy(); moved.revision = 1; moved.benches[0].tenantId = 'studio'; moved.benches[0].grants = { outsider: 'owner' };
+      assert.equal((await request('/api/policy', 'owner', 'PUT', moved)).status, 409);
+      assert.equal((await (await request('/api/policy')).json()).revision, 1);
+    });
+    const owner = await connect('owner'), editor = await connect('editor'), outsider = await connect('outsider', 'other-tenant');
+    await context.test('WebSocket presence/knock, focus refusal and scope-limited notifications', async () => {
+      await until(() => owner.messages.some((message) => message.kind === 'presence' && message.data.length === 2), 'two participants');
+      editor.socket.send(JSON.stringify({ kind: 'presence', mode: 'focus', x: 20, y: 30 }));
+      await until(() => owner.messages.some((message) => message.kind === 'presence' && message.data.some((person) => person.mode === 'focus')), 'focus');
+      owner.socket.send(JSON.stringify({ kind: 'knock', targetActorId: 'editor' }));
+      await until(() => owner.messages.some((message) => message.kind === 'error'), 'focus rejects knock');
+      editor.socket.send(JSON.stringify({ kind: 'knock', targetActorId: 'owner' }));
+      await until(() => owner.messages.some((message) => message.kind === 'knock'), 'knock');
+      assert.equal(outsider.messages.some((message) => message.kind === 'presence' && message.data.some((person) => person.actorId !== 'outsider')), false);
+    });
+    let saved;
+    const data = { kind: 'decision', text: 'Fictional runtime note', baseRevision: 0 }, requestId = 'runtime-save-request-0001';
+    await context.test('draft, viewer denial, revision conflict, atomic idempotency and explicit confirmation', async () => {
+      assert.equal((await request('/api/benches/shared/notes', 'viewer', 'POST', data, { 'Idempotency-Key': requestId })).status, 403);
+      assert.equal((await request('/api/benches/shared/notes', 'editor', 'POST', { ...data, status: 'confirmed' }, { 'Idempotency-Key': requestId })).status, 400);
+      saved = await (await request('/api/benches/shared/notes', 'editor', 'POST', data, { 'Idempotency-Key': requestId })).json();
+      assert.equal(saved.notes[0].status, 'draft');
+      const duplicate = await (await request('/api/benches/shared/notes', 'editor', 'POST', data, { 'Idempotency-Key': requestId })).json();
+      assert.equal(duplicate.revision, 1); assert.equal(duplicate.notes.length, 1);
+      assert.equal((await request('/api/benches/shared/notes', 'editor', 'POST', { ...data, text: 'different' }, { 'Idempotency-Key': requestId })).status, 409);
+      assert.equal((await request('/api/benches/shared/notes', 'editor', 'POST', data, { 'Idempotency-Key': 'runtime-stale-request-0002' })).status, 409);
+      const confirm = `/api/benches/shared/notes/${saved.notes[0].id}/confirm`;
+      assert.equal((await request(confirm, 'editor', 'POST', { baseRevision: 1 }, { 'Idempotency-Key': 'runtime-confirm-request-0003' })).status, 403);
+      assert.equal((await request(confirm, 'owner', 'POST', { baseRevision: 1 }, { 'Idempotency-Key': 'runtime-confirm-request-0003' })).status, 200);
+      assert.equal((await (await request('/api/benches/shared/handoff')).json()).authority.executionAuthorized, false);
+      await until(() => owner.messages.some((message) => message.kind === 'changed' && message.data.revision === 2), 'confirmed notification');
+      assert.equal(outsider.messages.some((message) => message.kind === 'changed' && message.data.revision > 0), false);
+    });
+    await context.test('actual SQLite failure rolls back note and receipt; retry succeeds without phantom notification', async () => {
+      await request('/__test/fail?on=1');
+      const next = { ...data, text: 'Recovery', baseRevision: 2 }, headers = { 'Idempotency-Key': 'runtime-retry-request-0004' };
+      assert.equal((await request('/api/benches/shared/notes', 'editor', 'POST', next, headers)).status, 503);
+      assert.equal((await (await request('/api/benches/shared')).json()).revision, 2);
+      assert.equal(owner.messages.some((message) => message.kind === 'changed' && message.data.revision === 3), false);
+      await request('/__test/fail?on=0');
+      assert.equal((await request('/api/benches/shared/notes', 'editor', 'POST', next, headers)).status, 201);
+      const stored = await (await request('/__test/inspect')).json();
+      assert.equal(stored.receipts.length, 3);
+      assert.doesNotMatch(JSON.stringify(stored), /expiresAt|updatedAt|"mode"|"x"|"y"|example.invalid/);
+    });
+    await context.test('grant and membership revocation close existing sockets, forbid writes and reconnects', async () => {
+      const policy = initialPolicy(); policy.revision = 1; delete policy.benches[0].grants.editor;
+      assert.equal((await request('/api/policy', 'owner', 'PUT', policy)).status, 200);
+      await until(() => editor.socket.readyState >= 2, 'revoked socket closed');
+      assert.equal((await request('/api/benches/shared', 'editor')).status, 404);
+      assert.equal((await request('/api/benches/shared/events', 'editor', 'GET', undefined, { Upgrade: 'websocket' })).status, 404);
+      assert.equal((await request('/api/benches/shared/notes', 'editor', 'POST', data, { 'Idempotency-Key': requestId })).status, 404);
+      const viewer = await connect('viewer');
+      policy.revision = 2; policy.members.atelier = policy.members.atelier.filter((subject) => subject !== 'viewer'); delete policy.benches[0].grants.viewer;
+      assert.equal((await request('/api/policy', 'owner', 'PUT', policy)).status, 200);
+      await until(() => viewer.socket.readyState >= 2, 'membership revoked');
+      assert.equal((await request('/api/benches/shared', 'viewer')).status, 404);
+    });
+    await context.test('JWT expiration closes an idle existing socket and prevents reconnection', async () => {
+      const token = await new SignJWT({ type: 'app', email: 'owner@example.invalid' }).setProtectedHeader({ alg: 'RS256', kid: 'pilot-test' }).setIssuer(issuer).setAudience(audience).setSubject('owner').setIssuedAt().setExpirationTime(Math.floor(Date.now() / 1000) + 2).sign(keys.privateKey);
+      const expiring = await connect(token);
+      await until(() => expiring.socket.readyState >= 2, 'expiry timer');
+      assert.equal((await request('/api/benches/shared/events', token, 'GET', undefined, { Upgrade: 'websocket' })).status, 401);
+    });
+    await context.test('runtime restart restores durable work and policy, never presence; reconnect fetches latest revision', async () => {
+      for (const socket of sockets) { try { socket.close(); } catch {} }
+      await runtime.dispose(); runtime = new Miniflare(runtimeOptions);
+      const restored = await (await request('/api/benches/shared')).json();
+      assert.equal(restored.revision, 3); assert.equal(restored.notes[0].status, 'confirmed');
+      assert.equal((await request('/api/benches/shared', 'editor')).status, 404);
+      const fresh = await connect('owner');
+      await until(() => fresh.messages.some((message) => message.kind === 'presence'), 'fresh presence');
+      assert.equal(fresh.messages.find((message) => message.kind === 'presence').data.length, 1);
+      assert.ok(fresh.messages.some((message) => message.kind === 'changed' && message.data.revision === 3));
+    });
+    await context.test('remote static build has no actor picker and all assets require identity', async () => {
+      assert.equal((await runtime.dispatchFetch(origin + '/')).status, 401);
+      assert.equal((await runtime.dispatchFetch(origin + '/app.js')).status, 401);
+      assert.doesNotMatch(await (await request('/')).text(), /id="actor"|id="login"|デモユーザー|value="aoi"/);
+      assert.doesNotMatch(await (await request('/app.js')).text(), /demo-actors|\/api\/session/);
+    });
+  } finally {
+    for (const socket of sockets) { try { socket.close(); } catch {} }
+    await runtime.dispose(); await rm(directory, { recursive: true, force: true });
+  }
+});

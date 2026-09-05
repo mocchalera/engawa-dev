@@ -30,16 +30,25 @@
 - handoff JSON は文脈のみで、外部実行権限を含まない
 - Node 組み込みテストと GitHub Actions CI
 
+## M1 remote pilot 基盤（未デプロイ）
+
+- 別entryの Workers API / Static Assets と、Cloudflare Access JWT の署名・issuer・audience・期限検証
+- membership と作業台grantを別々に検査する、SQLite Durable Object の権限台帳
+- 作業台ごとの SQLite 永続化、競合拒否、保存要求IDによる重複処理防止
+- メモリ内のみの WebSocket presence、期限切れと権限変更による既存接続の切断
+- 固定デモIDを含まないremote UI。ローカル版のJSONとは別ストア
+
+ローカルruntimeと署名付き架空IDによる検証済みです。**実際のCloudflare Accessログイン、クラウド公開、別PC二台の試験は未実施**です。設定と停止位置は `docs/PILOT.md`、検証記録は `docs/VERIFICATION-M1.md` を参照してください。
+
 ## まだ実装していないもの
 
-- 実ユーザー認証・招待管理
-- Cloudflare Workers / Durable Objects への移行
+- 実プロバイダーとの認証接続検証・招待管理UI
 - LiveKit による音声・Spatial Audio・画面共有
 - 録音・文字起こし
 - AI / Fumiori / Organization Agent 連携
 - 本番向けマルチテナント運用
 
-現在のユーザーは **固定の架空デモID** です。本番認証ではありません。ローカル検証専用で、インターネットへ公開しないでください。
+`npm start` のユーザーは **固定の架空デモID** です。本番認証ではありません。このNode版も、署名付き架空IDのブラウザfixtureも、インターネットへ公開しないでください。
 
 ## Run
 
@@ -58,7 +67,9 @@ npm start
 ## Test
 
 ```bash
+npm ci
 npm test
+npm run check
 ```
 
 ## Architecture
@@ -75,6 +86,6 @@ PresenceHub
   -> memory only / TTL
 ```
 
-将来は、アプリ状態同期を Cloudflare Durable Objects、音声・画面を LiveKit に分離する方針です。音量ゼロをアクセス制御に使わず、許可されていない音声はそもそも配信しません。
+remote entryではアプリ状態同期を Cloudflare Durable Objects に分離しました。音声・画面の LiveKit 接続は次のGateです。音量ゼロをアクセス制御に使わず、許可されていない音声はそもそも配信しません。
 
 詳しくは `docs/PRODUCT.md`, `docs/ARCHITECTURE.md`, `docs/SETUP.md`, `WORK_ORDER.md` を参照してください。

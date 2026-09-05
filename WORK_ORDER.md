@@ -9,6 +9,8 @@ Turn the local vertical slice into a two-person remote pilot without losing ENGA
 - Verify join, presence mode, knock, note save, explicit confirm, handoff and restart recovery.
 - Verify viewer and cross-workbench negative cases.
 
+M1 local evidence (2026-09-05): completed in the isolated Issue #1 feature branch. Real HTTP/SSE integration, two separate Cockpit browser identities, explicit confirmation/handoff and server restart recovery passed. See `docs/VERIFICATION-M1.md`; this does not certify remote PCs or a real identity provider.
+
 ## Gate 2 — Cloudflare state/auth vertical slice
 Replace the fixed demo identity boundary before any public deployment.
 
@@ -25,6 +27,8 @@ Acceptance:
 - stale revision is rejected
 - presence is not written to durable history
 - reconnect and revocation have negative tests
+
+M1 implementation: the separate remote entry, signed JWT verification, policy directory, SQLite work and memory-only WebSockets are implemented and tested locally. Real SQLite rollback injection, expiry/revocation and reconnect tests pass. A signed fictional identity fixture was also operated in two real browser profiles. **Gate 2 external acceptance remains open**: configure the actual Access app and subjects, obtain deployment authorization, then run a two-PC test. No deployment, main merge or billing/resource changes were performed. Setup and retained boundaries: `docs/PILOT.md`.
 
 ## Gate 3 — LiveKit media
 Only after Gate 2 authorization works.

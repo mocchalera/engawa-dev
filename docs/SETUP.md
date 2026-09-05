@@ -5,13 +5,14 @@ The local vertical slice needs only Node.js 22+.
 
 ```bash
 npm start
+npm ci
 npm test
 ```
 
 No framework account, LLM key or media provider is required for this stage.
 
 ## Cloud pilot
-Cloudflare is the first infrastructure candidate for static assets, API and synchronized workbench state. The next implementation should evaluate Workers + SQLite Durable Objects with real authentication before public deployment.
+The separate `remote/worker.ts` entry implements Workers + SQLite Durable Objects with Access JWT verification. See `PILOT.md` for local setup, administrator-managed grants and the external deployment gate. Tests mock only the identity provider/JWKS and asset binding; work and transactions run in workerd SQLite. No live provider account is configured by this implementation.
 
 Do not remove the loopback/public-host guard merely to get a public demo URL.
 
