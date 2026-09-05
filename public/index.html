@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f2f0e6">
+  <title>ENGAWA — 仕事の続きを、ここに。</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="notice">LOCAL PROTOTYPE / 架空ユーザー・録音なし・AI処理なし</div>
+  <div class="shell">
+    <aside>
+      <div class="brand"><span class="mark">三</span><div>engawa<small>縁側 / shared atelier</small></div></div>
+      <p class="kicker">YOUR PLACE</p>
+      <div class="place">共同アトリエ<small>小さく、いっしょにつくる。</small></div>
+      <p class="nav-title">作業台</p>
+      <nav id="bench-list"></nav>
+      <blockquote>一人でいても、<br>孤立しない。<br>集まっても、<br>拘束されない。</blockquote>
+      <div class="identity">
+        <label for="actor">デモユーザー</label>
+        <select id="actor"><option value="aoi">あおい</option><option value="ren">れん</option><option value="nagi">なぎ（招待ゲスト）</option><option value="sora">そら</option></select>
+        <button id="login">このユーザーで入る</button>
+      </div>
+    </aside>
+    <main>
+      <header><span>共同アトリエ / <b id="crumb">ようこそ</b></span><button id="logout" hidden>退出</button></header>
+      <section class="content">
+        <p class="kicker">A LITTLE SPACE, TOGETHER.</p>
+        <h1>仕事の続きを、ここに。</h1>
+        <p class="lead">集中する。ふと話す。途中のものを、そっと残す。</p>
+        <div id="welcome" class="welcome"><h2>小さな共同アトリエへ。</h2><p>まず「あおい」で入り、ひとつメモを残してみてください。</p></div>
+        <div id="workspace" hidden>
+          <div class="toolbar"><strong id="active-title"></strong><button id="handoff">引き継ぎJSON</button></div>
+          <div class="columns">
+            <div>
+              <section class="room">
+                <div class="roomline"><span id="presence-count">0人がここにいます</span><span>2.5D VIEW</span></div>
+                <div id="scene"></div>
+                <div class="roomline"><span>いることと、応答義務を切り離す。</span><span>気配は一時的</span></div>
+              </section>
+              <div class="presence-controls"><button id="join">作業台に参加する</button><select id="mode" disabled><option value="knock">ノックしてね</option><option value="available">会話歓迎</option><option value="focus">集中中</option><option value="away">離席中</option></select></div>
+              <div id="people"></div>
+              <p class="quiet">みんながいる必要はない。<br><strong>同じ続きを、持っていればいい。</strong></p>
+            </div>
+            <section class="workbench">
+              <div class="workbench-head"><div><p class="kicker">ON THE WORKBENCH</p><h2>作業のつづき</h2></div><span id="revision"></span></div>
+              <div class="goal"><small>この作業台の目的</small><p id="goal"></p><em id="role"></em></div>
+              <div id="notes"></div>
+              <form id="note-form"><label>続きを残す</label><select id="kind"><option value="question">未解決の問い</option><option value="decision">決定候補</option><option value="hypothesis">仮説</option><option value="constraint">制約</option><option value="task">次の作業</option></select><textarea id="note-text" maxlength="3000" rows="4" placeholder="途中のことばで、大丈夫。" required></textarea><button type="submit">メモを残す</button></form>
+              <div id="read-only" class="read-only" hidden>この招待は閲覧専用です。</div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div id="toast" role="status" hidden></div>
+  <dialog id="dialog"><button id="close">閉じる ×</button><p class="kicker">PICK UP WHERE WE LEFT OFF</p><h2>次の人への、引き継ぎ。</h2><p>文脈の書き出しです。AI生成でも外部実行許可でもありません。</p><pre id="handoff-text"></pre></dialog>
+</body>
+</html>
