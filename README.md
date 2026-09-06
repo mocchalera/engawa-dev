@@ -30,7 +30,7 @@
 - handoff JSON は文脈のみで、外部実行権限を含まない
 - Node 組み込みテストと GitHub Actions CI
 
-## M1 remote pilot 基盤（未デプロイ）
+## M1 remote pilot 基盤（限定pilotとしてデプロイ済み）
 
 - 別entryの Workers API / Static Assets と、Cloudflare Access JWT の署名・issuer・audience・期限検証
 - membership と作業台grantを別々に検査する、SQLite Durable Object の権限台帳
@@ -38,11 +38,13 @@
 - メモリ内のみの WebSocket presence、期限切れと権限変更による既存接続の切断
 - 固定デモIDを含まないremote UI。ローカル版のJSONとは別ストア
 
-ローカルruntimeと署名付き架空IDによる検証済みです。**実際のCloudflare Accessログイン、クラウド公開、別PC二台の試験は未実施**です。設定と停止位置は `docs/PILOT.md`、検証記録は `docs/VERIFICATION-M1.md` を参照してください。
+ローカルruntimeに加え、別途承認された限定pilotで実際のCloudflare Access認証、同一所有者の別PC同期、別アカウントの権限境界、期限切れ、同一ソース再デプロイ後の保存状態を確認しました。2026-09-06には異なる実アカウントの二台PCで集中／ノック、決定候補の保存と所有者による明示確定、再読み込み・退出を確認し、実環境で保存応答を失った場合の同一要求再送も検証しました。別PCの画面操作・受信・ログアウトは利用者報告、所有者画面・サーバー応答・保存状態は直接確認です。
+
+**M1限定pilotの最終実機検証を記録し、レビュー・マージ判断を待っています。** 検証用の追加権限は撤去し、所有者専用へ復元済みです。予定より1件多く保存された検証メモは削除せず保持し、検証報告に明記しています。クラウドDO単体の再起動は直接確認しておらず、一般公開・本番運用や製品全体の完成を認定するものではありません。実施済みと未確認の区別は `docs/VERIFICATION-PILOT.md`、設定手順は `docs/PILOT.md` を参照してください。`docs/VERIFICATION-M1.md` は初回実装時点の履歴として保持しています。
 
 ## まだ実装していないもの
 
-- 実プロバイダーとの認証接続検証・招待管理UI
+- セルフサービスの招待・権限管理UI（限定pilotの権限は管理者が設定）
 - LiveKit による音声・Spatial Audio・画面共有
 - 録音・文字起こし
 - AI / Fumiori / Organization Agent 連携

@@ -28,7 +28,13 @@ Acceptance:
 - presence is not written to durable history
 - reconnect and revocation have negative tests
 
-M1 implementation: the separate remote entry, signed JWT verification, policy directory, SQLite work and memory-only WebSockets are implemented and tested locally. Real SQLite rollback injection, expiry/revocation and reconnect tests pass. A signed fictional identity fixture was also operated in two real browser profiles. **Gate 2 external acceptance remains open**: configure the actual Access app and subjects, obtain deployment authorization, then run a two-PC test. No deployment, main merge or billing/resource changes were performed. Setup and retained boundaries: `docs/PILOT.md`.
+M1 implementation is merged at `882f289049abaa4af2fb1d6e867a400c3b2ed016`. The separate remote entry, signed JWT verification, policy directory, SQLite work and memory-only WebSockets are implemented. Local runtime and fictional-identity browser checks remain distinct from live evidence.
+
+After separate user approvals, a limited Access-protected pilot was deployed and exercised: same-owner two-PC synchronization/conflict/reconnect; distinct-account viewer/editor/revocation; populated cross-tenant isolation and update-notification isolation; natural idle authorization expiry; and preserved work/policy after same-source redeployment. Temporary permissions were removed and owner-only access restored. These later approvals do not authorize future deployments, invitations or billing changes.
+
+The final approved live workflow was verified on 2026-09-06: distinct-account two-physical-PC collaboration, focus rejection and return-to-knock delivery, explicit confirmation and non-authoritative handoff, reload/leave, and exact replay after a controlled lost save acknowledgement. Actual second-PC receipt/reload/logout observations are human reports; owner DOM, WebSocket responses, note state and cleanup were inspected directly. One additional guest-authored draft beyond the planned note budget was retained unconfirmed and disclosed; all pre-run notes were unchanged. Temporary permissions were removed and owner-only access was verified again.
+
+**Gate 2 review/merge acceptance remains open; the final live run is finished.** Review the evidence and the disclosed extra-draft deviation rather than repeating the live suite automatically. A specific cloud Durable Object instance restart is not directly proven; do not turn local restart tests or a deployment upload into that claim. See `docs/VERIFICATION-PILOT.md` for evidence, repeat-run boundaries and the pending decision. Setup and retained boundaries: `docs/PILOT.md`. Main merge, Issue closure and Gate 3 work still require their applicable authorization.
 
 ## Gate 3 — LiveKit media
 Only after Gate 2 authorization works.

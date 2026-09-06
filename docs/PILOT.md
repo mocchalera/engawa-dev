@@ -2,7 +2,9 @@
 
 ## State
 
-Implementation/local verification only. No Cloudflare account, secrets, provider policy or production resources were changed. Node demo and remote entry are separate; do not migrate fictional notes or identities into a real tenant. LiveKit, recording, transcription and AI remain unconfigured.
+A limited Access-protected pilot was deployed after separate user approvals. Real authentication, same-owner two-PC collaboration, distinct-account authorization, isolation, expiry and same-source deployment recovery have bounded live evidence. The final distinct-account two-PC workflow and live ambiguous-save retry were also verified on 2026-09-06, with second-PC screen observations explicitly attributed to the user. Temporary grants and Access admission were removed after testing; fresh owner access and the provider's owner-allowed/guest-blocked policy test verified the owner-only restoration. `VERIFICATION-PILOT.md` records the evidence, an extra retained draft beyond the planned note budget, and pending review/merge acceptance. `VERIFICATION-M1.md` is the historical pre-deployment implementation record, not the current deployment status.
+
+Past approvals are not standing authority for new invitations, deployments or billing/resource changes. Node demo and remote entry are separate; do not migrate fictional demo notes or identities into a real tenant. LiveKit, recording, transcription and AI remain unconfigured.
 
 ## Reproduce without an account
 
@@ -63,9 +65,11 @@ Removing Access access alone does not revoke an already validated JWT in memory 
 - Config/CI baseline is preserved by Git (`f0528a7da34fe5ae53945c139c8e52e02613f780`); use an isolated worktree at that revision for the prior local-only implementation. Do not reset the canonical checkout or delete remote SQLite to roll back an app build. A cloud rollback needs its own authorization and reviewed migration compatibility.
 - Dependency versions are fixed by `package-lock.json`; this Wrangler release brings Miniflare 5 alpha. Tests use its exported v4 option converter with explicit persistence root. Recheck runtime/persistence on upgrades.
 
-## Post-deployment acceptance (not done)
+## Post-deployment verification complete; review pending
 
-Two actual PCs with independent real Access sessions: grant-scoped bootstrap, join, focus/knock, draft save, owner confirmation, handoff, refresh/reconnect and stored-work recovery. Then viewer write, other-tenant/workbench reads and update notifications, session expiry, app membership/grant revocation and ambiguous save retry. Verify no demo/fixture endpoints, unauthenticated assets or alternate public ingress. Keep private identity evidence private. Only after this gate consider a separately scoped LiveKit task.
+The approved final live run is finished; do not repeat the suite merely because the original checklist predates deployment. Use `VERIFICATION-PILOT.md` for the separate earlier batches, final distinct-account two-PC evidence and exclusions. A cloud Durable Object instance restart is still not directly observed. Review/merge acceptance, Issue closure and any future LiveKit work remain separate decisions. Any rerun requires bounded permission, preserved notes and owner grants, and removal of temporary access afterward. Keep private identity evidence private.
+
+For coordinated manual checks, verify both current logins and participation immediately before the test. An observed one-person display returned to two after the owner's expired session was reauthenticated and explicitly rejoined; session duration was not extended. The earlier disconnected observations were not treated as concurrent participation evidence. A `decision` candidate and its `draft` status are different fields: the editor saves an unconfirmed candidate, and only the owner can explicitly confirm it. Repeatedly saving the same text is not the confirmation operation.
 
 ## Official specifications consulted (2026-09-05)
 

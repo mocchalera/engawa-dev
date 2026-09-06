@@ -164,6 +164,30 @@ test('Cloudflare runtime: verified identity, SQLite work, ephemeral sockets and 
       assert.equal(fresh.messages.find((message) => message.kind === 'presence').data.length, 1);
       assert.ok(fresh.messages.some((message) => message.kind === 'changed' && message.data.revision === 3));
     });
+    await context.test('restart retains subject-bound save and confirmation receipts without bypassing revocation', async () => {
+      const headers = { 'Idempotency-Key': requestId };
+      assert.equal((await request('/api/benches/shared/notes', 'editor', 'POST', data, headers)).status, 404);
+      assert.equal((await request('/api/benches/shared/notes', 'owner', 'POST', data, headers)).status, 409);
+      const policy = await (await request('/api/policy')).json();
+      policy.benches.find((bench) => bench.id === 'shared').grants.editor = 'editor';
+      assert.equal((await request('/api/policy', 'owner', 'PUT', policy)).status, 200);
+      const before = await (await request('/__test/inspect')).json();
+      const restored = await (await request('/api/benches/shared', 'editor')).json();
+      const duplicate = await request('/api/benches/shared/notes', 'editor', 'POST', data, headers);
+      assert.equal(duplicate.status, 201);
+      assert.deepEqual(await duplicate.json(), restored);
+      const changed = await request('/api/benches/shared/notes', 'editor', 'POST', { ...data, text: 'Changed retry after restart' }, headers);
+      assert.equal(changed.status, 409);
+      assert.equal((await changed.json()).error, 'idempotency_conflict');
+      const recovery = await request('/api/benches/shared/notes', 'editor', 'POST', { ...data, text: 'Recovery', baseRevision: 2 }, { 'Idempotency-Key': 'runtime-retry-request-0004' });
+      assert.equal(recovery.status, 201);
+      assert.deepEqual(await recovery.json(), restored);
+      const confirmed = await request(`/api/benches/shared/notes/${saved.notes[0].id}/confirm`, 'owner', 'POST', { baseRevision: 1 }, { 'Idempotency-Key': 'runtime-confirm-request-0003' });
+      assert.equal(confirmed.status, 200);
+      assert.equal((await confirmed.json()).revision, restored.revision);
+      assert.deepEqual(await (await request('/__test/inspect')).json(), before);
+      assert.equal((await (await request('/api/benches/shared/handoff')).json()).authority.executionAuthorized, false);
+    });
     await context.test('remote static build has no actor picker and all assets require identity', async () => {
       assert.equal((await runtime.dispatchFetch(origin + '/')).status, 401);
       assert.equal((await runtime.dispatchFetch(origin + '/app.js')).status, 401);
