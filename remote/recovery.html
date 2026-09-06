@@ -1,0 +1,12 @@
+<p id="connection-state" role="status">本人確認中</p>
+<section class="read-only" aria-label="自分の入力の退避と復元">
+  <p id="recovery-status"></p>
+  <a id="reauth" href="/" target="_blank" rel="noopener" hidden>別タブで再ログインする</a>
+  <details><summary>入力を安全に退避・復元する</summary>
+    <p>自動送信・端末への自動保存はしません。ページを閉じると入力は失われます。再ログインは別タブで行い、このページで「権限を再確認」を押してください。</p>
+    <button id="export-recovery" type="button">自分の退避JSONを表示・選択</button>
+    <label for="recovery-text">退避JSON（機密を含み得ます。安全な場所へコピー／同じ本人で戻ったら貼り付け）</label>
+    <textarea id="recovery-text" rows="5" spellcheck="false" autocomplete="off"></textarea>
+    <button id="import-recovery" type="button">貼り付けた入力・要求を復元（送信しない）</button>
+  </details>
+</section>

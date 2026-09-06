@@ -7,6 +7,7 @@ type Participant = { identity: Identity; mode: string; x: number; y: number };
 
 export class Workbench extends DurableObject<Env> {
   private connections = new Map<WebSocket, Participant>();
+  private limits = new Map<string, { started: number; messages: number; knocks: Map<string, number> }>();
   private timer: ReturnType<typeof setInterval> | undefined;
   private benchId = '';
   constructor(ctx: DurableObjectState, env: Env) {
@@ -27,7 +28,9 @@ export class Workbench extends DurableObject<Env> {
     return { ...stored, ...policy };
   }
   private remove(socket: WebSocket, code = 1000, reason = 'left') {
+    const subject = this.connections.get(socket)?.identity.id;
     this.connections.delete(socket);
+    if (subject && ![...this.connections.values()].some((item) => item.identity.id === subject)) this.limits.delete(subject);
     try { socket.close(code, reason); } catch {}
     if (!this.connections.size && this.timer) { clearInterval(this.timer); this.timer = undefined; }
   }
@@ -45,11 +48,17 @@ export class Workbench extends DurableObject<Env> {
   }
   private async publish(kind = 'presence', value?: unknown) {
     const live = await this.live();
-    const participants = live.map(([, participant]) => ({ actorId: participant.identity.id, name: participant.identity.name, mode: participant.mode, x: participant.x, y: participant.y }));
+    const present = live.filter(([socket]) => this.connections.has(socket));
+    const participants = [...new Set(present.map(([, participant]) => participant.identity.id))].map((subject) => {
+      const group = present.filter(([, participant]) => participant.identity.id === subject).map(([socket]) => this.connections.get(socket)!);
+      const participant = group[0];
+      const mode = ['focus', 'away', 'knock', 'available'].find((value) => group.some((item) => item.mode === value));
+      return { actorId: subject, name: participant.identity.name, mode, x: participant.x, y: participant.y };
+    });
     for (const [socket, participant] of live) {
       try {
         await this.authorized(participant.identity);
-        if (this.connections.has(socket)) socket.send(JSON.stringify({ kind, data: value ?? participants }));
+        if (this.connections.has(socket)) socket.send(JSON.stringify({ kind, actorId: participant.identity.id, data: value ?? participants }));
       } catch { this.remove(socket, 1008, 'Authorization unavailable'); }
     }
   }
@@ -57,7 +66,13 @@ export class Workbench extends DurableObject<Env> {
     try {
       const participant = this.connections.get(socket);
       if (!participant) return;
+      const now = Date.now();
+      const limit = this.limits.get(participant.identity.id) ?? { started: now, messages: 0, knocks: new Map<string, number>() };
+      if (now - limit.started >= 1000) { limit.started = now; limit.messages = 0; }
+      this.limits.set(participant.identity.id, limit);
+      if (++limit.messages > 10) throw new DomainError(429, 'message_rate', '操作が続いています。少し待ってください。');
       await this.authorized(participant.identity);
+      if (!this.connections.has(socket)) return;
       if (typeof raw !== 'string' || raw.length > 1024) throw new DomainError(400, 'invalid_message', '状態の入力が不正です。');
       const input = JSON.parse(raw);
       if (input?.kind === 'presence' && Object.keys(input).sort().join() === 'kind,mode,x,y' && MODES.includes(input.mode) && Number.isFinite(input.x) && Number.isFinite(input.y) && input.x >= 0 && input.x <= 100 && input.y >= 0 && input.y <= 100) {
@@ -65,16 +80,24 @@ export class Workbench extends DurableObject<Env> {
         this.connections.set(socket, { ...participant, mode: input.mode, x: input.x, y: input.y });
         await this.publish();
       } else if (input?.kind === 'knock' && Object.keys(input).sort().join() === 'kind,targetActorId') {
-        const target = (await this.live()).find(([, item]) => item.identity.id === input.targetActorId);
-        if (!target) throw new DomainError(404, 'not_found', '相手はいません。');
-        if (['focus', 'away'].includes(target[1].mode)) throw new DomainError(409, 'do_not_disturb', '相手は集中中または離席中です。');
+        const targets = (await this.live()).filter(([, item]) => item.identity.id === input.targetActorId);
+        if (!targets.length || input.targetActorId === participant.identity.id) throw new DomainError(409, 'not_present', 'ノックできる相手はいません。');
         await this.authorized(participant.identity);
-        await this.authorized(target[1].identity);
-        if (this.connections.has(socket) && this.connections.has(target[0])) target[0].send(JSON.stringify({ kind: 'knock', data: { from: participant.identity.name, microphoneStarted: false } }));
+        for (const [, target] of targets) await this.authorized(target.identity);
+        const currentTargets = [...this.connections].filter(([, item]) => item.identity.id === input.targetActorId);
+        if (currentTargets.some(([, item]) => ['focus', 'away'].includes(item.mode))) throw new DomainError(409, 'do_not_disturb', '相手のいずれかの接続が集中中または離席中です。');
+        const deliveryTime = Date.now();
+        for (const [target, last] of limit.knocks) if (deliveryTime - last >= 3000) limit.knocks.delete(target);
+        if (deliveryTime - (limit.knocks.get(input.targetActorId) ?? 0) < 3000) throw new DomainError(429, 'knock_cooldown', '同じ相手へのノックは3秒以上空けてください。');
+        if (this.connections.has(socket) && currentTargets.length) {
+          limit.knocks.set(input.targetActorId, deliveryTime);
+          for (const [targetSocket, target] of targets) if (this.connections.has(targetSocket)) targetSocket.send(JSON.stringify({ kind: 'knock', actorId: target.identity.id, data: { from: participant.identity.name, microphoneStarted: false } }));
+        }
       } else throw new DomainError(400, 'invalid_message', '状態の入力が不正です。');
     } catch (error) {
       if (error instanceof DomainError && error.status !== 404) {
-        if (this.connections.has(socket)) socket.send(JSON.stringify({ kind: 'error', data: { message: error.message } }));
+        if (this.connections.has(socket)) socket.send(JSON.stringify({ kind: 'error', actorId: this.connections.get(socket)!.identity.id, data: { code: error.code, message: error.message } }));
+        if (error.code === 'message_rate') this.remove(socket, 1008, 'Message rate exceeded');
       } else this.remove(socket, 1008, 'Authorization or message invalid');
     }
   }
@@ -91,6 +114,7 @@ export class Workbench extends DurableObject<Env> {
       if (request.method === 'GET' && action === 'events') {
         if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket' || request.headers.get('origin') !== url.origin) throw new DomainError(400, 'websocket_required', '同じサイトから接続してください。');
         if (this.connections.size >= 50) return json({ error: 'capacity' }, 429);
+        if ([...this.connections.values()].filter((item) => item.identity.id === identity.id).length >= 3) return json({ error: 'subject_capacity' }, 429);
         const pair = new WebSocketPair();
         const [client, socket] = Object.values(pair);
         socket.accept();
@@ -100,7 +124,7 @@ export class Workbench extends DurableObject<Env> {
         socket.addEventListener('close', closed);
         socket.addEventListener('error', closed);
         if (!this.timer) this.timer = setInterval(() => this.ctx.waitUntil(this.publish()), 5000);
-        socket.send(JSON.stringify({ kind: 'changed', data: { revision: this.read(policy).revision } }));
+        socket.send(JSON.stringify({ kind: 'changed', actorId: identity.id, data: { revision: this.read(policy).revision } }));
         this.ctx.waitUntil(this.publish());
         return new Response(null, { status: 101, webSocket: client });
       }

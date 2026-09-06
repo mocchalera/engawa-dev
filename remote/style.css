@@ -1,0 +1,7 @@
+#toast{position:static;transform:none;margin:16px 0;overflow-wrap:anywhere}
+#recovery-text{display:block;width:100%;margin:8px 0;padding:10px;border:1px solid var(--line);border-radius:4px;resize:vertical;font:12px/1.6 monospace;color:var(--ink);background:var(--panel)}
+#pending{overflow-wrap:anywhere}
+#pending button,#export-recovery,#import-recovery{border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);padding:8px 10px;margin:4px 4px 4px 0;cursor:pointer}
+button:disabled{opacity:.55;cursor:not-allowed}
+summary{cursor:pointer;color:var(--ink)}
+@media(max-width:680px){aside nav{display:flex;grid-column:1/-1}}
