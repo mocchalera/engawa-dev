@@ -39,7 +39,7 @@ A workbench grant is required for every read/mutation. Tenant membership alone i
 
 New records enter as `draft`. Owners may confirm decision/constraint/task records. Hypotheses/questions remain unresolved context. Handoff export includes `executionAuthorized: false`.
 
-## M1 remote boundary — locally implemented, not deployed
+## M1 remote boundary — implemented and deployed as a limited pilot
 
 ```text
 Browser
@@ -63,4 +63,6 @@ Each workbench uses a synchronous SQLite transaction for revision, selected note
 
 WebSockets use the standard, non-hibernating API deliberately: no socket attachment, presence, position or token is written to storage. Eviction/restart drops presence and requires reconnect; reconnect always fetches the current durable revision. Presence is optional and does not grant access. This keeps a small pilot simple, but active sockets/timers have runtime cost; no production cost or scale claim is made. The Directory is a small-pilot shared authority, not a sharded production identity system.
 
-Operational limits, provider preparation, provenance and unverified gates are in `PILOT.md` and `VERIFICATION-M1.md`.
+Live observations include real Access authentication, scoped authorization, idle expiry and preserved work/policy after a same-source deployment. Deployment-related disconnection and reconnection do not identify a particular Durable Object process restart. The pilot was restored to owner-only access after testing; this is not unrestricted publication or production-scale certification.
+
+Operational limits and provider preparation are in `PILOT.md`. `VERIFICATION-PILOT.md` separates live evidence and remaining acceptance; `VERIFICATION-M1.md` preserves the initial local implementation history.

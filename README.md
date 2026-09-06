@@ -30,7 +30,7 @@
 - handoff JSON は文脈のみで、外部実行権限を含まない
 - Node 組み込みテストと GitHub Actions CI
 
-## M1 remote pilot 基盤（未デプロイ）
+## M1 remote pilot 基盤（限定pilotとしてデプロイ済み）
 
 - 別entryの Workers API / Static Assets と、Cloudflare Access JWT の署名・issuer・audience・期限検証
 - membership と作業台grantを別々に検査する、SQLite Durable Object の権限台帳
@@ -38,11 +38,13 @@
 - メモリ内のみの WebSocket presence、期限切れと権限変更による既存接続の切断
 - 固定デモIDを含まないremote UI。ローカル版のJSONとは別ストア
 
-ローカルruntimeと署名付き架空IDによる検証済みです。**実際のCloudflare Accessログイン、クラウド公開、別PC二台の試験は未実施**です。設定と停止位置は `docs/PILOT.md`、検証記録は `docs/VERIFICATION-M1.md` を参照してください。
+ローカルruntimeに加え、別途承認された限定pilotで実際のCloudflare Access認証、同一所有者の別PC同期、別アカウントの権限境界、期限切れ、同一ソース再デプロイ後の保存状態を確認しました。検証用の追加権限は撤去し、所有者専用へ復元済みです。一般公開・本番運用の認定ではありません。
+
+**異なる実アカウントを使う二台のPCでの一連の協働操作など、最終受け入れは残っています。** 実施済みと未確認の区別は `docs/VERIFICATION-PILOT.md`、設定手順は `docs/PILOT.md` を参照してください。`docs/VERIFICATION-M1.md` は初回実装時点の履歴として保持しています。
 
 ## まだ実装していないもの
 
-- 実プロバイダーとの認証接続検証・招待管理UI
+- セルフサービスの招待・権限管理UI（限定pilotの権限は管理者が設定）
 - LiveKit による音声・Spatial Audio・画面共有
 - 録音・文字起こし
 - AI / Fumiori / Organization Agent 連携

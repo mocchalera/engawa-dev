@@ -2,7 +2,9 @@
 
 ## State
 
-Implementation/local verification only. No Cloudflare account, secrets, provider policy or production resources were changed. Node demo and remote entry are separate; do not migrate fictional notes or identities into a real tenant. LiveKit, recording, transcription and AI remain unconfigured.
+A limited Access-protected pilot was deployed after separate user approvals. Real authentication, same-owner two-PC collaboration, distinct-account authorization, isolation, expiry and same-source deployment recovery have bounded live evidence. Temporary grants and Access admission were removed after testing; the pilot was restored to owner-only access. `VERIFICATION-PILOT.md` records the observation scope and remaining final acceptance. `VERIFICATION-M1.md` is the historical pre-deployment implementation record, not the current deployment status.
+
+Past approvals are not standing authority for new invitations, deployments or billing/resource changes. Node demo and remote entry are separate; do not migrate fictional demo notes or identities into a real tenant. LiveKit, recording, transcription and AI remain unconfigured.
 
 ## Reproduce without an account
 
@@ -63,9 +65,9 @@ Removing Access access alone does not revoke an already validated JWT in memory 
 - Config/CI baseline is preserved by Git (`f0528a7da34fe5ae53945c139c8e52e02613f780`); use an isolated worktree at that revision for the prior local-only implementation. Do not reset the canonical checkout or delete remote SQLite to roll back an app build. A cloud rollback needs its own authorization and reviewed migration compatibility.
 - Dependency versions are fixed by `package-lock.json`; this Wrangler release brings Miniflare 5 alpha. Tests use its exported v4 option converter with explicit persistence root. Recheck runtime/persistence on upgrades.
 
-## Post-deployment acceptance (not done)
+## Post-deployment acceptance (partially verified)
 
-Two actual PCs with independent real Access sessions: grant-scoped bootstrap, join, focus/knock, draft save, owner confirmation, handoff, refresh/reconnect and stored-work recovery. Then viewer write, other-tenant/workbench reads and update notifications, session expiry, app membership/grant revocation and ambiguous save retry. Verify no demo/fixture endpoints, unauthenticated assets or alternate public ingress. Keep private identity evidence private. Only after this gate consider a separately scoped LiveKit task.
+Do not repeat the entire live suite merely because the original checklist predates deployment. Use `VERIFICATION-PILOT.md` to identify the remaining checks. Same-owner two-PC evidence and separate browser-profile account tests do not prove a distinct-account two-physical-PC workflow. Finish that workflow and live ambiguous-save retry with explicit, bounded permission; preserve all existing notes and owner grants, use new fictional verification content only, and restore temporary access afterward. Keep private identity evidence private. Only after this gate consider a separately scoped LiveKit task.
 
 ## Official specifications consulted (2026-09-05)
 
