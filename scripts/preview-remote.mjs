@@ -8,9 +8,12 @@ const audience = 'local-browser-fixture';
 const keys = await generateKeyPair('RS256', { extractable: true });
 const jwk = { ...await exportJWK(keys.publicKey), kid: 'fixture', alg: 'RS256', use: 'sig' };
 const tokens = Object.fromEntries(await Promise.all(['owner', 'editor', 'viewer'].map(async (subject) => [subject, await new SignJWT({ type: 'app', email: `${subject}@example.invalid` }).setSubject(subject).setIssuer(issuer).setAudience(audience).setIssuedAt().setExpirationTime('1h').setProtectedHeader({ alg: 'RS256', kid: 'fixture' }).sign(keys.privateKey)])));
+tokens.expired = await new SignJWT({ type: 'app', email: 'owner@example.invalid' }).setSubject('owner').setIssuer(issuer).setAudience(audience).setIssuedAt(1).setExpirationTime(2).setProtectedHeader({ alg: 'RS256', kid: 'fixture' }).sign(keys.privateKey);
+const port = Number(process.env.ENGAWA_FIXTURE_PORT ?? 14174);
+if (!Number.isSafeInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid loopback fixture port');
 const bundle = await build({ entryPoints: ['tests/remote-browser.ts'], bundle: true, write: false, format: 'esm', platform: 'browser', external: ['cloudflare:workers'] });
 const runtime = new Miniflare(convertV4MiniflareOptions({
-  name: 'engawa-browser-fixture', host: '127.0.0.1', port: 14174, modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-09-05',
+  name: 'engawa-browser-fixture', host: '127.0.0.1', port, modules: true, script: bundle.outputFiles[0].text, compatibilityDate: '2026-09-05',
   durableObjects: { DIRECTORY: { className: 'Directory', useSQLite: true }, WORKBENCHES: { className: 'Workbench', useSQLite: true } },
   bindings: { ACCESS_ISSUER: issuer, ACCESS_AUD: audience, ADMIN_SUBJECTS: 'owner', FIXTURE_TOKENS: JSON.stringify(tokens) },
   serviceBindings: { ASSETS: async (request) => {
@@ -21,8 +24,8 @@ const runtime = new Miniflare(convertV4MiniflareOptions({
   outboundService: async (request) => request.url === `${issuer}/cdn-cgi/access/certs` ? Response.json({ keys: [jwk] }) : new Response('No external requests', { status: 403 })
 }));
 await runtime.ready;
-const origin = 'http://127.0.0.1:14174';
-const response = await runtime.dispatchFetch(`${origin}/api/policy`, { method: 'PUT', headers: { Origin: origin, 'Cf-Access-Jwt-Assertion': tokens.owner, 'X-Engawa-Client': 'remote-ui', 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: 0, members: { atelier: ['owner', 'editor', 'viewer'] }, benches: [{ id: 'shared', tenantId: 'atelier', title: '二人の、仕事のつづき。', goal: '途中の仕事を残し、必要なときに集まる。', grants: { owner: 'owner', editor: 'editor', viewer: 'viewer' } }] }) });
+const origin = `http://127.0.0.1:${port}`;
+const response = await runtime.dispatchFetch(`${origin}/api/policy`, { method: 'PUT', headers: { Origin: origin, 'Cf-Access-Jwt-Assertion': tokens.owner, 'X-Engawa-Client': 'remote-ui', 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: 0, members: { atelier: ['owner', 'editor', 'viewer'], studio: ['owner', 'editor'] }, benches: [{ id: 'shared', tenantId: 'atelier', title: '二人の、仕事のつづき。', goal: '途中の仕事を残し、必要なときに集まる。', grants: { owner: 'owner', editor: 'editor', viewer: 'viewer' } }, { id: 'other', tenantId: 'studio', title: '別テナントの作業台', goal: '内容を取り違えない。', grants: { owner: 'owner', editor: 'editor' } }] }) });
 if (response.status !== 200) { await runtime.dispose(); throw new Error(`Fixture provisioning failed: ${response.status}`); }
-console.log('LOCAL SIGNED-IDENTITY FIXTURE ONLY: http://127.0.0.1:14174/__fixture/login/owner (or editor/viewer). Never expose this fixture.');
+console.log(`LOCAL SIGNED-IDENTITY FIXTURE ONLY: ${origin}/__fixture/login/owner (or editor/viewer). Never expose this fixture.`);
 for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, async () => { await runtime.dispose(); process.exit(0); });

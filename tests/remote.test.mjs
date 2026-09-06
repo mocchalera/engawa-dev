@@ -12,6 +12,7 @@ const origin = 'https://pilot.example';
 const initialPolicy = () => ({ revision: 0, members: { atelier: ['owner', 'editor', 'viewer', 'member-only'], studio: ['outsider'] }, benches: [
   { id: 'shared', tenantId: 'atelier', title: 'Fictional shared pilot', goal: 'Resume work', grants: { owner: 'owner', editor: 'editor', viewer: 'viewer' } },
   { id: 'private', tenantId: 'atelier', title: 'Private', goal: '', grants: { owner: 'owner' } },
+  { id: 'limits', tenantId: 'atelier', title: 'Fictional socket limits', goal: '', grants: { owner: 'owner', editor: 'editor' } },
   { id: 'other-tenant', tenantId: 'studio', title: 'Other tenant', goal: '', grants: { outsider: 'owner' } }
 ] });
 
@@ -92,6 +93,39 @@ test('Cloudflare runtime: verified identity, SQLite work, ephemeral sockets and 
         assert.deepEqual(await (await request(`/__test/gateway?bench=${bench}`, subject)).json(), { allocations: 0, status: 404 });
       }
       assert.deepEqual(await (await request('/__test/gateway?bench=shared')).json(), { allocations: 1, status: 503 });
+    });
+    await context.test('expected actor is a precondition, never an authentication override', async () => {
+      const before = await (await request('/api/benches/shared')).json();
+      assert.equal((await request('/api/benches/shared', 'editor', 'GET', undefined, { 'X-Engawa-Actor': 'owner' })).status, 401);
+      assert.equal((await request('/api/benches/shared/notes', 'editor', 'POST', { text: 'wrong session', kind: 'question', baseRevision: 0 }, { 'X-Engawa-Actor': 'owner', 'Idempotency-Key': 'wrong-session-request-0001' })).status, 401);
+      assert.deepEqual(await (await request('/api/benches/shared')).json(), before);
+      assert.equal((await request('/api/benches/shared', 'editor', 'GET', undefined, { 'X-Engawa-Actor': 'editor' })).status, 200);
+    });
+    await context.test('subject socket cap, unique people, conservative focus, knock cooldown and message budget', async () => {
+      const owners = await Promise.all([connect('owner', 'limits'), connect('owner', 'limits'), connect('owner', 'limits')]);
+      assert.equal((await request('/api/benches/limits/events', 'owner', 'GET', undefined, { Upgrade: 'websocket' })).status, 429);
+      const editors = await Promise.all([connect('editor', 'limits'), connect('editor', 'limits')]);
+      await until(() => owners[0].messages.some((message) => message.kind === 'presence' && message.data.length === 2), 'two subjects, five connections');
+      assert.ok(owners[0].messages.every((message) => message.actorId === 'owner'));
+      editors[1].socket.send(JSON.stringify({ kind: 'presence', mode: 'focus', x: 50, y: 55 }));
+      await until(() => owners[0].messages.some((message) => message.kind === 'presence' && message.data.some((person) => person.actorId === 'editor' && person.mode === 'focus')), 'any connection focus');
+      owners[0].socket.send(JSON.stringify({ kind: 'knock', targetActorId: 'editor' }));
+      await until(() => owners[0].messages.some((message) => message.data.code === 'do_not_disturb'), 'subject focus refuses');
+      assert.ok(editors.every((connection) => !connection.messages.some((message) => message.kind === 'knock')));
+      editors[1].socket.send(JSON.stringify({ kind: 'presence', mode: 'knock', x: 50, y: 55 }));
+      await until(() => owners[0].messages.filter((message) => message.kind === 'presence').at(-1)?.data.find((person) => person.actorId === 'editor')?.mode === 'knock', 'focus cleared');
+      owners[0].socket.send(JSON.stringify({ kind: 'knock', targetActorId: 'editor' }));
+      await until(() => editors.every((connection) => connection.messages.some((message) => message.kind === 'knock')), 'deliver to both eligible connections');
+      owners[1].socket.send(JSON.stringify({ kind: 'knock', targetActorId: 'editor' }));
+      await until(() => owners[1].messages.some((message) => message.data.code === 'knock_cooldown'), 'cooldown shared by sender subject');
+      assert.ok(editors.every((connection) => connection.messages.filter((message) => message.kind === 'knock').length === 1));
+      await new Promise((resolve) => setTimeout(resolve, 3050));
+      owners[1].socket.send(JSON.stringify({ kind: 'knock', targetActorId: 'editor' }));
+      await until(() => editors.every((connection) => connection.messages.filter((message) => message.kind === 'knock').length === 2), 'cooldown ends');
+      for (let index = 0; index < 12; index++) owners[2].socket.send(JSON.stringify({ kind: 'presence', mode: 'knock', x: 50, y: 55 }));
+      await until(() => owners[2].messages.some((message) => message.data.code === 'message_rate'), 'subject message budget');
+      await until(() => owners[2].socket.readyState >= 2, 'over-budget socket closed');
+      for (const connection of [...owners, ...editors]) connection.socket.close();
     });
     const owner = await connect('owner'), editor = await connect('editor'), outsider = await connect('outsider', 'other-tenant');
     await context.test('WebSocket presence/knock, focus refusal and scope-limited notifications', async () => {

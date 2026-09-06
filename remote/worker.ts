@@ -10,13 +10,14 @@ export default {
       const url = new URL(request.url);
       if (request.headers.get('origin') && request.headers.get('origin') !== url.origin) throw new DomainError(403, 'cross_origin', '別サイトからは操作できません。');
       const identity = await authenticate(request, env);
+      if (request.headers.has('X-Engawa-Actor') && request.headers.get('X-Engawa-Actor') !== identity.id) throw new DomainError(401, 'identity_changed', 'ログインした本人が変わりました。入力を退避して権限を再確認してください。');
       if (!['GET', 'HEAD'].includes(request.method) && (request.headers.get('origin') !== url.origin || request.headers.get('x-engawa-client') !== 'remote-ui')) throw new DomainError(403, 'csrf', 'アプリから操作してください。');
       const directory = env.DIRECTORY.getByName('policy');
       if (url.pathname === '/api/policy' && request.method === 'GET') {
         const result = await directory.inspectPolicy(identity);
         return json(result.policy ?? { error: result.error }, result.status);
       }
-      if (url.pathname === '/api/bootstrap' && request.method === 'GET') return json({ actor: { id: identity.id, name: identity.name }, benches: await directory.bootstrap(identity), capabilities: { recording: false, media: false, ai: false } });
+      if (url.pathname === '/api/bootstrap' && request.method === 'GET') return json({ actor: { id: identity.id, name: identity.name }, session: { expiresAt: identity.expiresAt }, benches: await directory.bootstrap(identity), capabilities: { recording: false, media: false, ai: false } });
       if (url.pathname === '/api/policy' && request.method === 'PUT') {
         const result = await directory.replace(identity, await body(request));
         if (result.status !== 200) return json(result, result.status);

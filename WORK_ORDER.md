@@ -34,17 +34,34 @@ After separate user approvals, a limited Access-protected pilot was deployed and
 
 The final approved live workflow was verified on 2026-09-06: distinct-account two-physical-PC collaboration, focus rejection and return-to-knock delivery, explicit confirmation and non-authoritative handoff, reload/leave, and exact replay after a controlled lost save acknowledgement. Actual second-PC receipt/reload/logout observations are human reports; owner DOM, WebSocket responses, note state and cleanup were inspected directly. One additional guest-authored draft beyond the planned note budget was retained unconfirmed and disclosed; all pre-run notes were unchanged. Temporary permissions were removed and owner-only access was verified again.
 
-**Gate 2 review/merge acceptance remains open; the final live run is finished.** Review the evidence and the disclosed extra-draft deviation rather than repeating the live suite automatically. A specific cloud Durable Object instance restart is not directly proven; do not turn local restart tests or a deployment upload into that claim. See `docs/VERIFICATION-PILOT.md` for evidence, repeat-run boundaries and the pending decision. Setup and retained boundaries: `docs/PILOT.md`. Main merge, Issue closure and Gate 3 work still require their applicable authorization.
+**M1 implementation and evidence through PR #3 are merged at `93a78e9be2326f971d435edd5830fcc38eb74897` (2026-09-06).** The approved final live run is finished. Keep its evidence and the disclosed extra-draft deviation rather than repeating the live suite automatically. The extra draft's cause remains unknown. A specific cloud Durable Object instance restart is not directly proven; do not turn local restart tests or a deployment upload into that claim. `docs/VERIFICATION-PILOT.md` and `docs/VERIFICATION-M1.md` remain unchanged historical records. Setup and retained boundaries: `docs/PILOT.md`. Issue #1 remains OPEN; M1 integration does not approve M1.1 merge, new deployment or Gate 3 work.
+
+## M1.1 — Issue #4, before media
+
+Goal: preserve the user's input and the correct workbench across saving, selection, network loss and reauthentication, without replacing the foundation.
+
+- Fence async success, failure and cleanup by actor/session epoch/tenant/workbench/selection.
+- Separate editable draft, immutable sent snapshot and unresolved save/confirm request. Resolve the original ID/body explicitly after reauthorization; no automatic resubmission or content-only deduplication.
+- Keep drafts in page memory, scoped to their author and workbench. Provide explicit own-input/request export/import for page navigation; never silently persist confidential work in localStorage.
+- Clear fetched information on detected authorization loss and known session expiry. Distinguish disconnected, login-required, voluntary nonparticipation and absent peers.
+- Bound socket count/message rate/knock frequency without a hibernation or auth-platform rewrite.
+- Verify the five original failures, extended VM regressions, local workerd/SQLite and two isolated real-browser profiles. Keep fixtures out of the production bundle.
+
+Evidence and limitations: `docs/VERIFICATION-M1.1.md`. Stop at a feature PR with exact SHA, checks and residual risks. Keep Issues #1/#4 OPEN, main unchanged, the existing pilot untouched and historical approvals closed. No new deploy, Access/policy/invite/billing changes or production writes.
 
 ## Gate 3 — LiveKit media
-Only after Gate 2 authorization works.
+Only after M1.1 review and separate authorization, in a distinct LiveKit PR.
+
+Product goal: two people intentionally begin a conversation and selected-window sharing, leave one explicit decision, exit, and later resume. Current avatar placement follows array order and transmitted coordinates are fixed; proximity interaction is not implemented.
 
 - backend issues short-lived room tokens after workbench authorization
 - microphone and selected-window screen share start OFF
-- leaving/focus/permission revocation stops publication
+- leaving/focus/tenant switch/permission revocation stops publication and subscription
+- short token TTL alone does not revoke existing media; plan provider participant removal/permission updates plus blocked token reissuance
 - separate authorization scopes become separate media rooms/subscriptions
 - never distribute private media to unauthorized clients and rely on volume=0
 - recording/transcription/AI remain OFF
+- no simultaneous React/Three.js migration or large 3D redesign
 
 ## Later
 - Fumiori/Organization Agent adapter for context retrieval
