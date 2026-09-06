@@ -16,7 +16,7 @@
 - Screen preview is not remote screen sharing. Do not imply media/AI functionality is connected before it is.
 
 ## Current implementation limits
-- `npm start` uses fixed fictional demo identities, not production authentication. The separate `remote/` entry verifies Cloudflare Access JWTs. A separately authorized limited pilot has live evidence in `docs/VERIFICATION-PILOT.md`; distinguish same-owner two-PC checks from distinct-account two-PC acceptance, which remains open.
+- `npm start` uses fixed fictional demo identities, not production authentication. The separate `remote/` entry verifies Cloudflare Access JWTs. The approved distinct-account two-PC workflow and live ambiguous-save retry now have bounded evidence in `docs/VERIFICATION-PILOT.md`; review/merge acceptance remains separate. The pilot is restored to owner-only access.
 - Local Node server binds to `127.0.0.1` and must not be exposed through a tunnel/reverse proxy.
 - JSON FileStore is a single-process development store, not a production multi-writer database.
 - Remote work uses SQLite Durable Objects and an administrator-managed membership/grant directory. Never ship `tests/remote-browser.ts` or expose the signed-identity loopback fixture.
