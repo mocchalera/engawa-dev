@@ -51,7 +51,11 @@ export class TownRuntime extends DurableObject<TownEnv> {
     for (const client of this.clients) { try { client.controller.enqueue(encoder.encode('event: revoked\ndata: {}\n\n')); client.controller.close(); } catch {} }
     this.clients.clear(); this.stopTimers();
   }
-  private stopTimers() { clearTimeout(this.timer); clearInterval(this.sweep); this.timer = undefined; this.sweep = undefined; }
+  private stopTimers() {
+    if (this.timer !== undefined) clearTimeout(this.timer);
+    if (this.sweep !== undefined) clearInterval(this.sweep);
+    this.timer = undefined; this.sweep = undefined;
+  }
   private async emit(client: Client, full = true) {
     try {
       const context = await this.context(client.identity);
