@@ -1,0 +1,14 @@
+{
+  "name": "engawa-town",
+  "private": true,
+  "version": "0.2.0-candidate.1",
+  "type": "module",
+  "engines": {
+    "node": ">=22.16"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check core.mjs && node --check storage.mjs && node --check server.mjs && node --check public/app.js && node --check public/world.js && npm test"
+  }
+}

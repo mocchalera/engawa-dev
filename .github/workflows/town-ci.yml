@@ -1,0 +1,23 @@
+name: Town candidate checks
+on:
+  push:
+    paths: ['town/**', '.github/workflows/town-ci.yml']
+  pull_request:
+    paths: ['town/**', '.github/workflows/town-ci.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    if: ${{ !contains(github.event.head_commit.message, '[source-transfer]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix town run check
+      - run: npx tsc --project town/tsconfig.json
+      - run: node --test town/tests/cloud.integration.mjs
