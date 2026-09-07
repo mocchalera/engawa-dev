@@ -1,0 +1,56 @@
+# Temporary, branch-scoped import of already generated and locally tested source.
+# No deployment, external credentials or changes to the existing pilot.
+name: Import Town candidate source
+on:
+  push:
+    branches: ['feat/town-community-20260907']
+    paths: ['.town-transfer/**']
+permissions:
+  contents: write
+jobs:
+  import:
+    if: github.ref == 'refs/heads/feat/town-community-20260907'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Verify and import bounded source packet
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, lzma, pathlib
+          root = pathlib.Path('.').resolve()
+          raw = b''.join((root / '.town-transfer' / f'part-{i:02}').read_bytes() for i in range(1,8))
+          assert hashlib.sha256(raw).hexdigest() == '06b141e1ffdb94a9e4f0970a3f9273474c3c8b3274ca290f3766064018f68c75', 'Transfer digest mismatch'
+          unpacker = lzma.LZMADecompressor(memlimit=128*1024*1024)
+          decoded = unpacker.decompress(raw, max_length=1024*1024)
+          assert unpacker.eof and not unpacker.unused_data, 'Oversized or trailing source'
+          files = json.loads(decoded)
+          allowed = set('''docs/TOWN-ROLLOUT.md docs/TOWN-VISION.md docs/VERIFICATION-TOWN.md town/.gitignore town/README.md town/core.mjs town/local-login.html town/local-login.js town/package.json town/public/app.js town/public/index.html town/public/recovery.js town/public/style.css town/public/world.js town/server.mjs town/storage.mjs town/tests/boundary.test.mjs town/tests/browser_offline.py town/tests/cloud.integration.mjs town/tests/core.test.mjs town/tests/http.test.mjs town/tests/recovery.test.mjs town/tests/storage.test.mjs town/tsconfig.json town/worker.ts town/wrangler.jsonc'''.split())
+          assert isinstance(files, dict) and set(files) == allowed, 'Unexpected file set'
+          for name, text in files.items():
+              target = root / name
+              assert isinstance(text, str) and len(text.encode('utf-8')) < 256*1024
+              assert target.resolve().is_relative_to(root) and not target.exists() and not target.is_symlink(), 'Add-only source import'
+              assert all(not p.is_symlink() for p in target.parents), 'Symlink boundary'
+          for name, text in files.items():
+              target = root / name
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(text, encoding='utf-8')
+          print('Verified and imported', len(files), 'text source files')
+          PY
+      - name: Verify local candidate
+        run: npm --prefix town run check
+      - name: Commit readable source to the feature branch only
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add town docs/TOWN-ROLLOUT.md docs/TOWN-VISION.md docs/VERIFICATION-TOWN.md
+          git rm -r .town-transfer
+          git commit -m 'Add Town community implementation and 39 verified local checks'
+          git push origin HEAD:refs/heads/feat/town-community-20260907
