@@ -1,0 +1,6 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile, readdir } from 'node:fs/promises';
+const file=p=>readFile(new URL(p,import.meta.url),'utf8');
+test('deployable assets never contain fixture identities, session minting or browser persistence',async()=>{const paths=await readdir(new URL('../public/',import.meta.url));assert.deepEqual(paths.sort(),['app.js','index.html','recovery.js','style.css','world.js']);const all=(await Promise.all(paths.map(p=>file('../public/'+p)))).join('\n');assert.doesNotMatch(all,/localStorage|sessionStorage|local\/session|data-actor=|id=['"]aoi/);});
+test('production Worker authenticates assets, overwrites identity and leaves media disabled',async()=>{const worker=await file('../worker.ts'),config=JSON.parse(await file('../wrangler.jsonc'));assert.match(worker,/await authenticate\(request, env\)/);assert.match(worker,/new Headers\(\{ 'X-Engawa-Town-Identity'/);assert.match(worker,/microphone=\(\), camera=\(\), display-capture=\(\)/);assert.equal(config.assets.run_worker_first,true);assert.equal(config.workers_dev,false);assert.equal(config.preview_urls,false);assert.equal(config.assets.directory,'public');assert.doesNotMatch(worker,/FIXTURES|aoi|sora/);});

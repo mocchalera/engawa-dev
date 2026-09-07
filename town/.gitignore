@@ -1,0 +1,4 @@
+.data/
+test-artifacts/
+node_modules/
+.wrangler/

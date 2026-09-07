@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {Town,emptyState} from '../core.mjs';
+import {TABLE_SQL,encodeRows,decodeRows,writeChanges} from '../storage.mjs';
+const ctx={actor:{id:'owner',expiresAt:Date.now()+3600000},places:[{id:'home',tenantId:'one',title:'Home',goal:'',role:'owner'}]};
+const all=db=>db.prepare('SELECT kind,owner,id,value FROM town_records ORDER BY rowid').all();
+test('first mutation includes the schema and all work round-trips through real SQLite',()=>{const db=new DatabaseSync(':memory:');db.exec(TABLE_SQL);const t=new Town();let n=0;for(const text of ['A','B'])t.execute(ctx,{op:'post',roomId:'home',revision:t.room('home').revision,requestId:`r${++n}`,text});writeChanges((sql,...args)=>db.prepare(sql).run(...args),emptyState(),t.durable());assert.deepEqual(decodeRows(all(db)),t.durable());db.close();});
+test('failed SQL transaction never publishes or partially saves a prepared mutation',()=>{const db=new DatabaseSync(':memory:');db.exec(TABLE_SQL);const t=new Town();const prepared=t.prepare(ctx,{op:'post',roomId:'home',revision:0,requestId:'first',text:'pending'});let n=0;db.exec('BEGIN');assert.throws(()=>writeChanges((sql,...args)=>{if(++n===2)throw new Error('disk failure');db.prepare(sql).run(...args);},t.durable(),prepared.state),/disk failure/);db.exec('ROLLBACK');assert.equal(all(db).length,0);assert.equal(t.room('home').posts.length,0);db.close();});
+test('large aggregate history is stored in small records, not a single giant value',()=>{const state=emptyState();state.rooms.home={revision:350,posts:Array.from({length:350},(_,i)=>({id:`p${i}`,text:'x'.repeat(7000),at:1,order:i,author:'owner'})),tasks:[],objects:[],ambience:'auto',game:{}};const rows=[...encodeRows(state).values()];assert.ok(rows.reduce((n,r)=>n+r.value.length,0)>2*1024*1024);assert.ok(rows.every(r=>r.value.length<8000));assert.deepEqual(decodeRows(rows),state);});
+test('corrupt or orphan state fails closed rather than silently starting empty',()=>{assert.throws(()=>decodeRows([{kind:'room',owner:'',id:'home',value:'{}'}]),/schema/);assert.throws(()=>decodeRows([{kind:'meta',owner:'',id:'schema',value:'1'},{kind:'post',owner:'missing',id:'p',value:'{}'}]),/Orphan/);});
